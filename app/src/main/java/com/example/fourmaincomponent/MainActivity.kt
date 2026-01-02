@@ -1,6 +1,10 @@
 package com.example.fourmaincomponent
 
+import android.Manifest
+import android.os.Build
 import android.os.Bundle
+import android.provider.MediaStore
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
@@ -9,6 +13,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.core.app.ActivityCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.work.*
 import androidx.work.NetworkType
@@ -20,82 +25,61 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // permission (خیلی ساده، همون چیزی که قبلاً گفتی)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(Manifest.permission.READ_MEDIA_AUDIO),
+                0
+            )
+        }
+
         setContent {
             MaterialTheme {
                 Column(
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
 
                     Text(
-                        text = "WorkManager demo",
+                        text = "ContentProvider Demo",
                         style = MaterialTheme.typography.headlineSmall
                     )
-                    Spacer(Modifier.height(16.dp))
 
-                    val workManager = WorkManager.getInstance(this@MainActivity)
+                    Spacer(Modifier.height(20.dp))
 
-                    fun enqueueOneTime(label: String, withConstraints: Boolean) {
-                        val constraints = if (withConstraints) {
-                            Constraints.Builder()
-                                .setRequiredNetworkType(NetworkType.CONNECTED)
-                                .build()
-                        } else {
-                            Constraints.NONE
-                        }
-
-                        val request = OneTimeWorkRequestBuilder<SimpleLogWorker>()
-                            .setInitialDelay(5, TimeUnit.SECONDS)
-                            .setConstraints(constraints)
-                            .setInputData(workDataOf("label" to label))
-                            .build()
-
-                        workManager.enqueue(request)
-                    }
-
-                    Button(onClick = {
-                        // 1) OneTimeWork (no constraints) — runs after 5s
-                        enqueueOneTime(label = "OneTimeWork", withConstraints = false)
-                    }) {
-                        Text("OneTimeWork (5s)")
-                    }
-
-                    Spacer(Modifier.height(10.dp))
-
-                    Button(onClick = {
-                        // 2) OneTimeWork + Constraints — needs internet, then runs after 5s
-                        enqueueOneTime(label = "OneTime + Constraint(Network)", withConstraints = true)
-                    }) {
-                        Text("OneTime + Constraint")
-                    }
-
-                    Spacer(Modifier.height(10.dp))
-
-                    Button(onClick = {
-                        // 3) PeriodicWork — minimum is 15 minutes on Android
-                        val periodicRequest = PeriodicWorkRequestBuilder<SimpleLogWorker>(
-                            15, TimeUnit.MINUTES
-                        )
-                            .setInputData(workDataOf("label" to "PeriodicWork"))
-                            .build()
-
-                        // Use a fixed name so repeated clicks don't create endless periodic jobs
-                        workManager.enqueueUniquePeriodicWork(
-                            "SimpleLogWorkerPeriodic",
-                            ExistingPeriodicWorkPolicy.UPDATE,
-                            periodicRequest
-                        )
-                    }) {
-                        Text("PeriodicWork (15m)")
-                    }
-
-                    Spacer(Modifier.height(18.dp))
-
-                    Button(onClick = { workManager.cancelAllWork() }) {
-                        Text("Cancel All Works")
+                    Button(onClick = { loadSongs() }) {
+                        Text("Load songs from device")
                     }
                 }
+            }
+        }
+    }
+
+    private fun loadSongs() {
+        val uri = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+
+        val projection = arrayOf(
+            MediaStore.Audio.Media.TITLE
+        )
+
+        val cursor = contentResolver.query(
+            uri,
+            projection,
+            null,
+            null,
+            null
+        )
+
+        cursor?.use {
+            val titleIndex = it.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
+
+            while (it.moveToNext()) {
+                val title = it.getString(titleIndex)
+                Log.d("MusicDemo", "Song: $title")
             }
         }
     }
