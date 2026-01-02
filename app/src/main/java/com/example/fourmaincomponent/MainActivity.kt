@@ -1,65 +1,90 @@
 package com.example.fourmaincomponent
 
-import android.Manifest
-import android.content.Intent
-import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.core.app.ActivityCompat
-import com.example.fourmaincomponent.ui.theme.FourMainComponentTheme
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.work.*
+import java.util.concurrent.TimeUnit
 
 class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // simple permission request (like your screenshot)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            ActivityCompat.requestPermissions(
-                this,
-                arrayOf(Manifest.permission.POST_NOTIFICATIONS),
-                0
-            )
-        }
+        val workManager = WorkManager.getInstance(this)
 
         setContent {
             MaterialTheme {
                 Column(
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
 
-                    Button(onClick = {
-                        val intent = Intent(this@MainActivity, MyForegroundService::class.java)
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                            startForegroundService(intent)
-                        } else {
-                            startService(intent)
-                        }
-                    }) {
-                        Text("Start Foreground Service")
+                    val workInfos by workManager
+                        .getWorkInfosForUniqueWorkFlow("retryable_sync")
+                        .collectAsStateWithLifecycle(emptyList())
+
+                    val workInfo: WorkInfo? = workInfos.firstOrNull()
+
+                    val stateText = workInfo?.state?.name ?: "IDLE"
+                    val attemptNumber = (workInfo?.runAttemptCount ?: 0) + 1
+
+                    val stableMessage = when (workInfo?.state) {
+                        WorkInfo.State.RUNNING ->
+                            workInfo.progress.getString("message") ?: "Running..."
+                        WorkInfo.State.ENQUEUED ->
+                            if ((workInfo.runAttemptCount) > 0) "No internet (will retry)..."
+                            else "Waiting to start..."
+                        WorkInfo.State.SUCCEEDED -> "Sync succeeded ✅"
+                        WorkInfo.State.CANCELLED -> "Cancelled"
+                        WorkInfo.State.FAILED -> "Failed"
+                        else -> "-"
                     }
 
+                    Text("State: $stateText")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("Attempt: $attemptNumber")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("Last message: $stableMessage")
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
                     Button(onClick = {
-                        val intent = Intent(this@MainActivity, MyForegroundService::class.java)
-                        stopService(intent)
+                        val request =
+                            OneTimeWorkRequestBuilder<RetryableSyncWorker>()
+                                .setInitialDelay(5, TimeUnit.SECONDS)
+                                .setBackoffCriteria(
+                                    BackoffPolicy.LINEAR,
+                                    5,
+                                    TimeUnit.SECONDS
+                                )
+                                .build()
+
+                        workManager.enqueueUniqueWork(
+                            "retryable_sync",
+                            ExistingWorkPolicy.REPLACE,
+                            request
+                        )
                     }) {
-                        Text("Stop Service")
+                        Text("Start Retryable Sync")
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Button(onClick = {
+                        workManager.cancelUniqueWork("retryable_sync")
+                    }) {
+                        Text("Cancel Sync")
                     }
                 }
             }
