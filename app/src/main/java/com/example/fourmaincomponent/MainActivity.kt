@@ -11,6 +11,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.work.*
+import androidx.work.NetworkType
+import androidx.work.workDataOf
 import java.util.concurrent.TimeUnit
 
 class MainActivity : ComponentActivity() {
@@ -18,73 +20,80 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        val workManager = WorkManager.getInstance(this)
-
         setContent {
             MaterialTheme {
                 Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(24.dp),
+                    modifier = Modifier.fillMaxSize(),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
 
-                    val workInfos by workManager
-                        .getWorkInfosForUniqueWorkFlow("retryable_sync")
-                        .collectAsStateWithLifecycle(emptyList())
+                    Text(
+                        text = "WorkManager demo",
+                        style = MaterialTheme.typography.headlineSmall
+                    )
+                    Spacer(Modifier.height(16.dp))
 
-                    val workInfo: WorkInfo? = workInfos.firstOrNull()
+                    val workManager = WorkManager.getInstance(this@MainActivity)
 
-                    val stateText = workInfo?.state?.name ?: "IDLE"
-                    val attemptNumber = (workInfo?.runAttemptCount ?: 0) + 1
+                    fun enqueueOneTime(label: String, withConstraints: Boolean) {
+                        val constraints = if (withConstraints) {
+                            Constraints.Builder()
+                                .setRequiredNetworkType(NetworkType.CONNECTED)
+                                .build()
+                        } else {
+                            Constraints.NONE
+                        }
 
-                    val stableMessage = when (workInfo?.state) {
-                        WorkInfo.State.RUNNING ->
-                            workInfo.progress.getString("message") ?: "Running..."
-                        WorkInfo.State.ENQUEUED ->
-                            if ((workInfo.runAttemptCount) > 0) "No internet (will retry)..."
-                            else "Waiting to start..."
-                        WorkInfo.State.SUCCEEDED -> "Sync succeeded ✅"
-                        WorkInfo.State.CANCELLED -> "Cancelled"
-                        WorkInfo.State.FAILED -> "Failed"
-                        else -> "-"
+                        val request = OneTimeWorkRequestBuilder<SimpleLogWorker>()
+                            .setInitialDelay(5, TimeUnit.SECONDS)
+                            .setConstraints(constraints)
+                            .setInputData(workDataOf("label" to label))
+                            .build()
+
+                        workManager.enqueue(request)
                     }
 
-                    Text("State: $stateText")
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text("Attempt: $attemptNumber")
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text("Last message: $stableMessage")
+                    Button(onClick = {
+                        // 1) OneTimeWork (no constraints) — runs after 5s
+                        enqueueOneTime(label = "OneTimeWork", withConstraints = false)
+                    }) {
+                        Text("OneTimeWork (5s)")
+                    }
 
-                    Spacer(modifier = Modifier.height(24.dp))
+                    Spacer(Modifier.height(10.dp))
 
                     Button(onClick = {
-                        val request =
-                            OneTimeWorkRequestBuilder<RetryableSyncWorker>()
-                                .setInitialDelay(5, TimeUnit.SECONDS)
-                                .setBackoffCriteria(
-                                    BackoffPolicy.LINEAR,
-                                    5,
-                                    TimeUnit.SECONDS
-                                )
-                                .build()
+                        // 2) OneTimeWork + Constraints — needs internet, then runs after 5s
+                        enqueueOneTime(label = "OneTime + Constraint(Network)", withConstraints = true)
+                    }) {
+                        Text("OneTime + Constraint")
+                    }
 
-                        workManager.enqueueUniqueWork(
-                            "retryable_sync",
-                            ExistingWorkPolicy.REPLACE,
-                            request
+                    Spacer(Modifier.height(10.dp))
+
+                    Button(onClick = {
+                        // 3) PeriodicWork — minimum is 15 minutes on Android
+                        val periodicRequest = PeriodicWorkRequestBuilder<SimpleLogWorker>(
+                            15, TimeUnit.MINUTES
+                        )
+                            .setInputData(workDataOf("label" to "PeriodicWork"))
+                            .build()
+
+                        // Use a fixed name so repeated clicks don't create endless periodic jobs
+                        workManager.enqueueUniquePeriodicWork(
+                            "SimpleLogWorkerPeriodic",
+                            ExistingPeriodicWorkPolicy.UPDATE,
+                            periodicRequest
                         )
                     }) {
-                        Text("Start Retryable Sync")
+                        Text("PeriodicWork (15m)")
                     }
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(Modifier.height(18.dp))
 
-                    Button(onClick = {
-                        workManager.cancelUniqueWork("retryable_sync")
-                    }) {
-                        Text("Cancel Sync")
+                    Button(onClick = { workManager.cancelAllWork() }) {
+                        Text("Cancel All Works")
                     }
                 }
             }
