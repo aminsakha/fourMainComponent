@@ -1,6 +1,7 @@
 package com.example.fourmaincomponent
 
 import android.Manifest
+import android.content.ContentUris
 import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
@@ -25,14 +26,12 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // permission (خیلی ساده، همون چیزی که قبلاً گفتی)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            ActivityCompat.requestPermissions(
-                this,
-                arrayOf(Manifest.permission.READ_MEDIA_AUDIO),
-                0
-            )
-        }
+        ActivityCompat.requestPermissions(
+            this,
+            arrayOf(Manifest.permission.READ_MEDIA_AUDIO),
+            0
+        )
+
 
         setContent {
             MaterialTheme {
@@ -63,7 +62,8 @@ class MainActivity : ComponentActivity() {
         val uri = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
 
         val projection = arrayOf(
-            MediaStore.Audio.Media.TITLE
+            MediaStore.Audio.Media.TITLE,
+            MediaStore.Audio.Media._ID
         )
 
         val cursor = contentResolver.query(
@@ -73,13 +73,20 @@ class MainActivity : ComponentActivity() {
             null,
             null
         )
+        Log.d("MusicDemo", "Cursor count = ${cursor?.count ?: 0}")
 
         cursor?.use {
+            val idIndex = it.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
             val titleIndex = it.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
 
             while (it.moveToNext()) {
+                val id = it.getLong(idIndex)
                 val title = it.getString(titleIndex)
+
+                val songUri = ContentUris.withAppendedId(uri, id)
+
                 Log.d("MusicDemo", "Song: $title")
+                Log.d("MusicDemo", "Song URI: $songUri")
             }
         }
     }
