@@ -1,58 +1,72 @@
 package com.example.fourmaincomponent
 
-import android.content.Intent
-import android.content.IntentFilter
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.example.fourmaincomponent.ui.theme.FourMainComponentTheme
+import com.example.fourmaincomponent.model.SocialPost
 
 class MainActivity : ComponentActivity() {
-    private val airplaneModeReceiver = AirplaneModeReceiver()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-
-        val filter = IntentFilter(Intent.ACTION_AIRPLANE_MODE_CHANGED)
-        registerReceiver(airplaneModeReceiver, filter)
-
-
-        enableEdgeToEdge()
         setContent {
-            FourMainComponentTheme {
-                Greeting(name = "Android")
+            MaterialTheme {
+                PostBoxScreen()
             }
         }
     }
+}
 
-    override fun onDestroy() {
-        super.onDestroy()
-        unregisterReceiver(airplaneModeReceiver)
+@Composable
+fun PostBoxScreen() {
+    var isLoading by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+    var posts by remember { mutableStateOf<List<SocialPost>>(emptyList()) }
+
+    LaunchedEffect(Unit) {
+        isLoading = true
+        errorMessage = null
+
+        try {
+            posts = loadPosts()
+        } catch (exception: Exception) {
+            errorMessage = exception.message ?: "Unknown error"
+        } finally {
+            isLoading = false
+        }
     }
-}
 
-@Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-    Text(
-        text = "Hello $name!",
-        modifier = modifier.padding(32.dp)
-    )
-}
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp)
+    ) {
+        Text("PostBox With Retrofit", style = MaterialTheme.typography.headlineSmall)
+        Spacer(Modifier.height(16.dp))
 
-@Preview(showBackground = true)
-@Composable
-fun GreetingPreview() {
-    FourMainComponentTheme {
-        Greeting("Android")
+        if (isLoading)
+            CircularProgressIndicator()
+
+        Spacer(Modifier.height(16.dp))
+
+        errorMessage?.let {
+            Text("Error: $it", color = MaterialTheme.colorScheme.error)
+            Spacer(Modifier.height(12.dp))
+        }
+
+        LazyColumn {
+            items(posts) { post ->
+                Text("• ${post.title}")
+                Spacer(Modifier.height(8.dp))
+            }
+        }
     }
 }
