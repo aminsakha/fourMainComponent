@@ -3,6 +3,7 @@ package com.example.fourmaincomponent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -28,26 +29,28 @@ class MainActivity : ComponentActivity() {
             }
 
             FourMainComponentTheme(darkTheme = isDarkTheme) {
-                Surface(Modifier.fillMaxSize()) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(24.dp),
-                        verticalArrangement = Arrangement.Center,
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(if (isDarkTheme) "Dark Mode" else "Light Mode")
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.background)
+                        .padding(24.dp),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        if (isDarkTheme) "Dark Mode" else "Light Mode",
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
 
-                        Switch(
-                            checked = isDarkTheme,
-                            onCheckedChange = { newValue ->
-                                isDarkTheme = newValue
-                                coroutineScope.launch {
-                                    themePreferences.saveDarkThemeEnabled(newValue)
-                                }
+                    Switch(
+                        checked = isDarkTheme,
+                        onCheckedChange = { newValue ->
+                            isDarkTheme = newValue
+                            coroutineScope.launch {
+                                themePreferences.saveDarkThemeEnabled(newValue)
                             }
-                        )
-                    }
+                        }
+                    )
                 }
             }
         }
