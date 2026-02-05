@@ -18,17 +18,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         setContent {
-            val coroutineScope = rememberCoroutineScope()
-            val themePreferences = remember { ThemePreferences(applicationContext) }
-
-            var isDarkTheme by remember { mutableStateOf(false) }
-
-            // load saved value once
-            LaunchedEffect(Unit) {
-                isDarkTheme = themePreferences.isDarkThemeEnabled()
-            }
-
-            FourMainComponentTheme(darkTheme = isDarkTheme) {
+            FourMainComponentTheme() {
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
@@ -37,20 +27,6 @@ class MainActivity : ComponentActivity() {
                     verticalArrangement = Arrangement.Center,
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text(
-                        if (isDarkTheme) "Dark Mode" else "Light Mode",
-                        color = MaterialTheme.colorScheme.onBackground
-                    )
-
-                    Switch(
-                        checked = isDarkTheme,
-                        onCheckedChange = { newValue ->
-                            isDarkTheme = newValue
-                            coroutineScope.launch {
-                                themePreferences.saveDarkThemeEnabled(newValue)
-                            }
-                        }
-                    )
                 }
             }
         }
