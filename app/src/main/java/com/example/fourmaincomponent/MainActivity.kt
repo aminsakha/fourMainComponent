@@ -11,6 +11,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -32,53 +33,52 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             FourMainComponentTheme {
-                val appContext = LocalContext.current
-                val contactDao = remember { DatabaseProvider.getContactDao(appContext) }
-                val coroutineScope = rememberCoroutineScope()
-
-                var currentScreen by remember { mutableStateOf(Screen.LIST) }
-                val contacts = remember { mutableStateListOf<ContactEntity>() }
-
-                suspend fun refreshContacts() {
-                    val latestContacts = contactDao.getAll()
-                    contacts.clear()
-                    contacts.addAll(latestContacts)
-                }
-
-                LaunchedEffect(Unit) {
-                    refreshContacts()
-                }
-
-                when (currentScreen) {
-                    Screen.LIST -> ContactsListScreen(
-                        contacts = contacts,
-                        onAddContact = { currentScreen = Screen.ADD },
-                        onDeleteContact = { contact ->
-                            coroutineScope.launch {
-                                contactDao.delete(contact)
-                                refreshContacts()
-                            }
-                        }
-                    )
-
-                    Screen.ADD -> AddContactScreen(
-                        onSave = { name, phone ->
-                            coroutineScope.launch {
-                                contactDao.insert(
-                                    ContactEntity(
-                                        name = name,
-                                        phone = phone
-                                    )
-                                )
-                                refreshContacts()
-                                currentScreen = Screen.LIST
-                            }
-                        },
-                        onBack = { currentScreen = Screen.LIST }
-                    )
-                }
+                ContactsApp()
             }
         }
+    }
+}
+
+@Composable
+private fun ContactsApp() {
+    val appContext = LocalContext.current
+    val contactDao = remember { DatabaseProvider.getContactDao(appContext) }
+    val coroutineScope = rememberCoroutineScope()
+
+    var currentScreen by rememberSaveable { mutableStateOf(Screen.LIST) }
+    val contacts = remember { mutableStateListOf<ContactEntity>() }
+
+    suspend fun refreshContacts() {
+        contacts.clear()
+        contacts.addAll(contactDao.getAll())
+    }
+
+    LaunchedEffect(contactDao) {
+        refreshContacts()
+    }
+
+    when (currentScreen) {
+        Screen.LIST -> ContactsListScreen(
+            contacts = contacts,
+            onAddContact = { currentScreen = Screen.ADD },
+            onDeleteContact = { contact ->
+                coroutineScope.launch {
+                    contactDao.delete(contact)
+                    refreshContacts()
+                }
+            }
+        )
+
+        Screen.ADD -> AddContactScreen(
+            onSave = { contactName, phoneNumber ->
+                coroutineScope.launch {
+                    contactDao.insert(ContactEntity(name = contactName, phone = phoneNumber))
+                    refreshContacts()
+                    currentScreen = Screen.LIST
+                }
+            },
+            onBack = { currentScreen = Screen.LIST }
+        )
     }
 }
 
@@ -102,11 +102,7 @@ private fun ContactsListScreen(
         }
     ) { innerPadding ->
         LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            modifier = Modifier.fillMaxSize().padding(innerPadding)
         ) {
             items(contacts) { contact ->
                 ContactRow(
@@ -123,33 +119,16 @@ private fun ContactRow(
     contact: ContactEntity,
     onDelete: () -> Unit
 ) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        tonalElevation = 1.dp,
-        shape = MaterialTheme.shapes.medium
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = contact.name,
-                    style = MaterialTheme.typography.titleMedium
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = contact.phone,
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            }
+    ListItem(
+        headlineContent = { Text(text = contact.name) },
+        supportingContent = { Text(text = contact.phone) },
+        trailingContent = {
             TextButton(onClick = onDelete) {
                 Text(text = "Delete")
             }
         }
-    }
+    )
+    Divider()
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -158,8 +137,8 @@ private fun AddContactScreen(
     onSave: (String, String) -> Unit,
     onBack: () -> Unit
 ) {
-    var contactName by remember { mutableStateOf("") }
-    var contactPhone by remember { mutableStateOf("") }
+    var contactName by rememberSaveable { mutableStateOf("") }
+    var contactPhone by rememberSaveable { mutableStateOf("") }
 
     Scaffold(
         topBar = {
@@ -181,19 +160,17 @@ private fun AddContactScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
 
-            OutlinedTextField(
+            ContactTextField(
+                label = "Name",
                 value = contactName,
-                onValueChange = { contactName = it },
-                label = { Text("Name") },
-                modifier = Modifier.fillMaxWidth()
+                onValueChange = { contactName = it }
             )
 
-            OutlinedTextField(
+            ContactTextField(
+                label = "Phone",
                 value = contactPhone,
-                onValueChange = { contactPhone = it },
-                label = { Text("Phone") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                modifier = Modifier.fillMaxWidth()
+                keyboardType = KeyboardType.Phone,
+                onValueChange = { contactPhone = it }
             )
 
             Button(
@@ -208,4 +185,20 @@ private fun AddContactScreen(
             }
         }
     }
+}
+
+@Composable
+private fun ContactTextField(
+    label: String,
+    value: String,
+    keyboardType: KeyboardType = KeyboardType.Text,
+    onValueChange: (String) -> Unit
+) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        label = { Text(label) },
+        keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+        modifier = Modifier.fillMaxWidth()
+    )
 }
