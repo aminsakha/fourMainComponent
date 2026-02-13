@@ -1,4 +1,4 @@
-package com.example.fourmaincomponent
+package com.example.fourmaincomponent.flow
 
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
